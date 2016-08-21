@@ -1,0 +1,4 @@
+[Project]
+Name=AutonomousRCCar
+Manager=KDevCMakeManager
+VersionControl=kdevgit
