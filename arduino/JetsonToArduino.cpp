@@ -13,32 +13,6 @@
 #include "JetsonToArduino.h"
 
 
-int main(){
-
-	/* open serial port */
-  	int fd = open("/dev/ttyACM0", O_RDWR | O_NOCTTY);
-	char key;
-	while(true){
-
-	std::cout << "Press a key\n";
-      	std::cin >> key;
-      	std::cout << "You pressed: " << key;
-
-	}
-   	
-      	
-      
-  	/*moveForward(fd);
-	steerLeft(fd);
-	steerRight(fd);
-	steerStraight(fd);
-	moveBackward(fd);*/
-	
-	return 0;
-
-}
-
-
 void moveForward(int fd){
 
 	sendToArduino(fd,FORWARD);
@@ -50,6 +24,11 @@ void moveBackward(int fd){
 
 	sendToArduino(fd,BACKWARD);
 
+}
+
+void stop(int fd){
+  
+  sendToArduino(fd,STOP);
 }
 
 void steerLeft(int fd){
@@ -72,7 +51,7 @@ void steerStraight(int fd){
 
 
 void sendToArduino(int fd, int direction){
-
+	printf("moving %d",direction);
 	char tmp[12]={0x0};
 	sprintf(tmp,"%11d", direction);
 	write(fd, tmp, sizeof(tmp));

@@ -8,7 +8,7 @@ const int RIGHT = 4;
 const int STEER_STRAIGHT = 5;
 
 
-
+void stop(int fd);
 
 void moveForward(int fd);
 
