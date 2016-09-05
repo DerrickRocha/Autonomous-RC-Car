@@ -1,1 +1,0 @@
-/usr/bin/c++   -g   CMakeFiles/autonomousrccar.dir/main.cpp.o  -o autonomousrccar -rdynamic 
