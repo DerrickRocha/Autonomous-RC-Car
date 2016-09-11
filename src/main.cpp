@@ -9,14 +9,28 @@
 #include <sys/ioctl.h>
 #include <iostream>
 #include <stdlib.h>
-
+#include <boost/filesystem.hpp>
 #include "arduino/JetsonToArduino.h"
+#include "StereoPair.h"
+
+#define WIDTH	640
+#define HEIGHT	480
+#define FPS	30
+#define MAX_DEPTH 1.8
+const string INSTALL_DIRECTORY = "/home/autonomousCar/";
+const string DATA_DIRECTORY = "/home/" + string(getlogin()) + "/autonomousCar/"; // user home directory
+
 
 int main(int argc, char **argv) {
-  /* open serial port */
-  	int fd = open("/dev/ttyACM0", O_RDWR | O_NOCTTY);
+	StereoPair stereoCam(WIDTH, HEIGHT, FPS, DATA_DIRECTORY);
+    	stereoCam.maximumDepth = MAX_DEPTH;
+        stereoCam.calibrate();
+
+   //open serial port 
+  	/*int fd = open("/dev/ttyACM0", O_RDWR | O_NOCTTY);
 	char key;
 	while(true){
+
 	  std::cout << "\nPress a key\n";
 	  std::cin >> key;
 	  std::cout << "\nYou pressed: " << key;
@@ -26,16 +40,10 @@ int main(int argc, char **argv) {
 	  if(key == 'l') steerRight(fd);
 	  if(key == 'o') steerStraight(fd);
 	  if(key == ',') moveBackward(fd);
+		
 
-	}
+	}*/
    	
-      	
-      
-  	/*moveForward(fd);
-	steerLeft(fd);
-	steerRight(fd);
-	steerStraight(fd);
-	moveBackward(fd);*/
 	
 	return 0;
 }

@@ -4,14 +4,16 @@
 
 
 #include "opencv2/opencv.hpp"
-#include "pcl/common/common_headers.h"
-#include "pcl/io/pcd_io.h"
-#include "pcl/visualization/pcl_visualizer.h"
-#include <pcl/visualization/cloud_viewer.h>
+//#include "pcl/common/common_headers.h"
+//#include "pcl/io/pcd_io.h"
+//#include "pcl/visualization/pcl_visualizer.h"
+//#include <pcl/visualization/cloud_viewer.h>
 #include "boost/thread/thread.hpp"
-#include "DUOLib.h"
+//#include "DUOLib.h"
+#include<stdio.h>
 
-//#include "cv.h"
+
+
 
 
 #define DUO3D
@@ -29,17 +31,10 @@ struct Rectification
 class StereoPair {
 private:
 	//Atributes
-    # ifdef DUO3D
-    static DUOInstance duoCam;      // DUO3D camera instance
-    static PDUOFrame   duoFrame;      // DUO3D stereo frame
-    int exposure;       // From 0 to 100
-    int ledIntensity;   // From 0 to 100
-    # else
-    struct Webcam {
+   struct Webcam {
         VideoCapture	left;
         VideoCapture	right;
     } webcam;
-    # endif
     bool    useColorImages;
     bool    flippedUpsideDown;
     bool    swapped;
@@ -55,7 +50,7 @@ private:
     string          calibration_ParametersFileName;
     string          sgbm_ParametersFileName;
     
-    boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer3D;
+   // boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer3D;
     
 public:
     ///////Public objects and variables/////////
@@ -84,8 +79,8 @@ public:
     void displayImages(bool drawLines);
     void displayDisparityMap();
     void displayImage3D();
-    boost::shared_ptr<pcl::visualization::PCLVisualizer> getPointCloudVisualizer();
-    void updatePointCloudVisualizer(boost::shared_ptr<pcl::visualization::PCLVisualizer> & viewer);
+   // boost::shared_ptr<pcl::visualization::PCLVisualizer> getPointCloudVisualizer();
+    //void updatePointCloudVisualizer(boost::shared_ptr<pcl::visualization::PCLVisualizer> & viewer);
     
 	// Initialization methods
 	void setupRectification();

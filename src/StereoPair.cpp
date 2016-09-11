@@ -2,7 +2,8 @@
 
 #include "StereoPair.h"
 #include "CommonMethods.h"
-#include "DUO3D_camera.h"
+//#include "DUO3D_camera.h"
+#include <string>
 
 //————————————————————————————————————————————————————————————————————
 // saveImage
@@ -92,25 +93,14 @@ StereoPair::StereoPair(int width, int height, int fps, string _dataDirectory){
     calibration_numberOfImages = 16;
     
     
-# ifdef DUO3D
-    if(!OpenDUOCamera(width, height, fps)){
-        cout << "\n*******CAMERA INITIALIZATION ERROR******" << endl;
-        exit(EXIT_FAILURE);
-    }
-    // Set exposure and LED brightness
-    exposure = 20;
-    ledIntensity = 0;
-    SetExposure(exposure);
-    SetLed(ledIntensity);
-# else
+
     //Open and configure cameras
     webcam.left = VideoCapture();
     webcam.right = VideoCapture();
-    if(!webcam.left.open(1) || !webcam.right.open(2)){
+    if(!webcam.left.open(0) || !webcam.right.open(1)){
         cout << "\n*******CAMERA INITIALIZATION ERROR******" << endl;
         exit(EXIT_FAILURE);
     }
-# endif
     
     // Setup rectification parameters and rectification maps
     setupRectification();
@@ -178,20 +168,7 @@ void StereoPair::rectifyImages(bool doRectify){
 void StereoPair::updateImages() {
     Mat newFrameL, newFrameR;
     
-# ifdef DUO3D
-    // Capture DUO frame
-    PDUOFrame pFrameData = GetDUOFrame();
-    if(pFrameData == NULL) return;
-    IplImage *left =  cvCreateImageHeader(cvSize(imageWidth, imageHeight), IPL_DEPTH_8U, 1);
-    IplImage *right = cvCreateImageHeader(cvSize(imageWidth, imageHeight), IPL_DEPTH_8U, 1);
-    // Set the image data
-    left->imageData =  (char*)pFrameData->leftData;
-    right->imageData = (char*)pFrameData->rightData;
-    // DUO3D seems to have a bug and gives left image as right!
-    newFrameL = right;
-    newFrameR = left;
-    
-# else
+
     //First grab the undecoded frames, as this is a fast operation and thus the delay between captures will be lower
     assert(webcam.left.grab());
     assert(webcam.right.grab());
@@ -201,7 +178,7 @@ void StereoPair::updateImages() {
         cvtColor(newFrameL,newFrameL,CV_RGB2GRAY);
         cvtColor(newFrameR,newFrameR,CV_RGB2GRAY);
     }
-# endif
+
     if (flippedUpsideDown) {
         Mat tmpL, tmpR;
         flip(newFrameL, tmpL, -1);  // Flip vertically
@@ -257,18 +234,11 @@ void StereoPair::displayImages(bool drawLines) {
         
         // Save the images if 's' or 'S' key has been pressed
         if( keyPressed==83 || keyPressed==115) {
-            saveImage(leftImage, (rectify? "Rectified_L_" + to_string(frameCount) : "Uncalibrated_L_" + to_string(frameCount)), dataDirectory);
-            saveImage(rightImage, (rectify? "Rectified_R_" + to_string(frameCount) : "Uncalibrated_R_" + to_string(frameCount)), dataDirectory);
-            if (drawLines) saveImage(LR, "StereoPair" + to_string(frameCount), dataDirectory);
+            saveImage(leftImage, (rectify? "Rectified_L_" + std::to_string(frameCount) : "Uncalibrated_L_" + std::to_string(frameCount)), dataDirectory);
+            saveImage(rightImage, (rectify? "Rectified_R_" + std::to_string(frameCount) : "Uncalibrated_R_" + std::to_string(frameCount)), dataDirectory);
+            if (drawLines) saveImage(LR, "StereoPair" + std::to_string(frameCount), dataDirectory);
             frameCount++;
         }
-        
-#ifdef DUO3D
-        // Run exposure autotune if 'a' or 'A' is pressed
-        if(keyPressed==65 || keyPressed==97) {
-            autoTuneExposure();
-        }
-#endif
         
         // Exit if 'esc' key is pressed
         if( keyPressed==27) {
@@ -354,103 +324,11 @@ void StereoPair::updateDisparityImg(float scaleFactor){
 
 
 //————————————————————————————————————————————————————————————————————
-//  getPointCloudVisualizer
-//————————————————————————————————————————————————————————————————————
-
-boost::shared_ptr<pcl::visualization::PCLVisualizer> StereoPair::getPointCloudVisualizer() {
-    boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
-    viewer->setBackgroundColor (1, 1, 1);
-    viewer->addCoordinateSystem ( 1.0 );
-    viewer->initCameraParameters ();
-    
-    updatePointCloudVisualizer(viewer);
-    
-    return viewer;
-}
-
-
-//————————————————————————————————————————————————————————————————————
-//  updatePointCloudVisualizer
-//————————————————————————————————————————————————————————————————————
-
-void StereoPair::updatePointCloudVisualizer(boost::shared_ptr<pcl::visualization::PCLVisualizer> & viewer) {
-    bool usePixelColor = false;
-    float pointCloudScale = 100.0;
-    //Create point cloud and fill it
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr point_cloud_ptr (new pcl::PointCloud<pcl::PointXYZRGB>);
-    float minZ = 1000000, maxZ = 0;
-    for(int i = 0; i < image3D.cols; i++){
-        #pragma omp parallel for
-        for(int j = 0; j < image3D.rows; j++){
-            pcl::PointXYZRGB point;
-            point.x = float(image3D.at<Vec3f>(j, i).val[0]*pointCloudScale);
-            point.y = float(image3D.at<Vec3f>(j, i).val[1]*pointCloudScale);
-            point.z = float(image3D.at<Vec3f>(j, i).val[2]*pointCloudScale);
-            // Filter points that are at the background (noise)
-            if (point.z > maximumDepth) continue;
-            if(point.z < minZ) minZ = point.z;
-            if (point.z > maxZ) maxZ = point.z;
-            
-            if (usePixelColor) {
-                Scalar color = leftImage.at<uchar>(Point(i, j));
-                uint8_t r(color.val[0]);
-                uint8_t g(color.val[0]);
-                uint8_t b(color.val[0]);
-                if (float(image3D.at<Vec3f>(j, i).val[2]) > 0.015) {
-                    r = uint8_t(0);
-                    g = uint8_t(0);
-                    b = uint8_t(255);
-                }
-                
-                uint32_t rgb = (static_cast<uint32_t>(r) << 16 |
-                                static_cast<uint32_t>(g) << 8 | static_cast<uint32_t>(b));
-                point.rgb = *reinterpret_cast<float*>(&rgb);
-            }
-            
-            /*  // Used for debugging the function populateScenario from ObstacleScenario class
-            if(point.y > 0.0 && point.y < 0.1) {
-                if(point.x > -3.0/2.0 && point.x < 3.0/2.0) {
-                    if (point.z < 2.0) {
-                        point_cloud_ptr->points.push_back(point);
-                    }
-                }
-            }
-            */
-            point_cloud_ptr->points.push_back(point);
-        }
-    }
-    
-    if (!usePixelColor) {
-        //  Apply color gradient to the point cloud
-        #pragma omp parallel for
-        for(unsigned int i = 0; i < point_cloud_ptr->size(); i++){
-            float pz = point_cloud_ptr->at(i).z;
-            int pz_mapped = int(mapValue(pz, minZ, maxZ, 0, 255));
-            uint8_t r(255 - constrain(pz_mapped, 0, 255));
-            uint8_t g(constrain(pz_mapped, 0, 255));
-            uint8_t b(15);
-            uint32_t rgb = (static_cast<uint32_t>(r) << 16 |
-                            static_cast<uint32_t>(g) << 8 | static_cast<uint32_t>(b));
-            point_cloud_ptr->at(i).rgb = *reinterpret_cast<float*>(&rgb);
-        }
-    }
-    
-    point_cloud_ptr->width = (int) point_cloud_ptr->points.size();
-    point_cloud_ptr->height = 1;
-    
-    viewer->removeAllPointClouds();
-    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(point_cloud_ptr);
-    viewer->addPointCloud<pcl::PointXYZRGB>(point_cloud_ptr, rgb, "reconstruction");
-    viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "reconstruction");
-}
-
-
-//————————————————————————————————————————————————————————————————————
 //  displayImage3D
 //————————————————————————————————————————————————————————————————————
 
 void StereoPair::displayImage3D(){
-    boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer = getPointCloudVisualizer();
+   /* boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer = getPointCloudVisualizer();
     
     while (!viewer->wasStopped())
     {
@@ -464,7 +342,7 @@ void StereoPair::displayImage3D(){
         if (keyPressed==27){
             viewer->close();
         }
-    }
+    }*/
 }
 
 //————————————————————————————————————————————————————————————————————
@@ -592,7 +470,7 @@ void StereoPair::displayDisparityMap() {
         
         // Save the images if required (press 's' or 'S')
         else if(keyPressed== 83 || keyPressed==115) {
-            saveImage(disparityMapNormalised, "DepthMap_" + to_string(frameCount), dataDirectory);
+            saveImage(disparityMapNormalised, "DepthMap_" + std::to_string(frameCount), dataDirectory);
             frameCount++;
         }
         
@@ -614,7 +492,7 @@ void StereoPair::displayDisparityMap() {
 //————————————————————————————————————————————————————————————————————
 
 void StereoPair::calibrate(){
-
+	                    cout << "*** calibrate bitch" << endl;
 	///////////INITIAL PARAMETERS//////////////
 	Size boardSize = Size(9, 6);	//Inner board corners
 	float squareSize = 0.022;       //The actual square size, in any unit (meters prefered)
@@ -962,54 +840,4 @@ float StereoPair::computeFieldOfView() {
     else return -1;
 }
 
-#ifdef DUO3D
-//————————————————————————————————————————————————————————————————————
-//  autoTuneExposure
-//————————————————————————————————————————————————————————————————————
 
-void StereoPair::autoTuneExposure(){    // TODO: auto adjust infrared led intensity
-    const int whiteThreshold = 254;
-    const int maxNumberOfWhitePixels = 50000;
-    const int minNumberOfWhitePixels = 40000;
-    const int numberOfIterations = 60;
-    
-    updateImages();
-    
-    for(int i=0; i<numberOfIterations; i++){
-        int whitePixelsCount = 0;
-        for( int i = 0; i < leftImage.rows; ++i){
-            for( int j = 0; j < leftImage.cols; ++j ){
-                Scalar intensity = leftImage.at<uchar>(Point(j, i));
-                if(intensity.val[0] > whiteThreshold){
-                    whitePixelsCount++;
-                }
-            }
-        }
-        for( int i = 0; i < rightImage.rows; ++i){
-            for( int j = 0; j < rightImage.cols; ++j ){
-                Scalar intensity = rightImage.at<uchar>(Point(j, i));
-                if(intensity.val[0] > whiteThreshold){
-                    whitePixelsCount++;
-                }
-            }
-        }
-        
-        if (whitePixelsCount > maxNumberOfWhitePixels)
-            exposure = constrain(exposure-2, 0, 100);
-        else if (whitePixelsCount < minNumberOfWhitePixels)
-            exposure = constrain(exposure+2, 0, 100);
-    
-        SetExposure(exposure);
-        updateImages();
-        Mat LR = glueTwoImagesHorizontal(leftImage, rightImage);
-        cvtColor(LR, LR, COLOR_GRAY2BGR);   // Convert to BGR (RGB) color space for drawing a coloured rectangle.
-        rectangle(LR, Point(0, 0), Point(LR.cols*i/numberOfIterations, 10), CV_RGB(255, 123, 47), CV_FILLED, 8);
-        putText(LR, "Exposure: " + to_string(exposure), Point(50,40), FONT_HERSHEY_SIMPLEX, 0.7, CV_RGB(255, 123, 47), 2);
-        putText(LR, "LED     : " + to_string(ledIntensity), Point(50,70), FONT_HERSHEY_SIMPLEX, 0.7, CV_RGB(255, 123, 47), 2);
-        imshow("autotune exposure", LR);
-        waitKey(1);
-    }
-    destroyWindow("autotune exposure");
-    for(int i = 0; i < 10; i++) waitKey(1);
-}
-#endif
