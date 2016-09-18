@@ -13,9 +13,9 @@
 #include "arduino/JetsonToArduino.h"
 #include "StereoPair.h"
 
-#define WIDTH	640
-#define HEIGHT	480
-#define FPS	30
+#define WIDTH	320
+#define HEIGHT	240
+#define FPS	5
 #define MAX_DEPTH 1.8
 const string INSTALL_DIRECTORY = "/home/autonomousCar/";
 const string DATA_DIRECTORY = "/home/" + string(getlogin()) + "/autonomousCar/"; // user home directory

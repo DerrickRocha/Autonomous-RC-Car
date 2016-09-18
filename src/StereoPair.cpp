@@ -97,7 +97,7 @@ StereoPair::StereoPair(int width, int height, int fps, string _dataDirectory){
     //Open and configure cameras
     webcam.left = VideoCapture();
     webcam.right = VideoCapture();
-    if(!webcam.left.open(0) || !webcam.right.open(1)){
+    if(!webcam.left.open(1) || !webcam.right.open(0)){
         cout << "\n*******CAMERA INITIALIZATION ERROR******" << endl;
         exit(EXIT_FAILURE);
     }
