@@ -4,10 +4,10 @@
 
 
 #include "opencv2/opencv.hpp"
-//#include "pcl/common/common_headers.h"
-//#include "pcl/io/pcd_io.h"
-//#include "pcl/visualization/pcl_visualizer.h"
-//#include <pcl/visualization/cloud_viewer.h>
+#include "pcl/common/common_headers.h"
+#include "pcl/io/pcd_io.h"
+#include "pcl/visualization/pcl_visualizer.h"
+#include <pcl/visualization/cloud_viewer.h>
 #include "boost/thread/thread.hpp"
 //#include "DUOLib.h"
 #include<stdio.h>
@@ -50,7 +50,7 @@ private:
     string          calibration_ParametersFileName;
     string          sgbm_ParametersFileName;
     
-   // boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer3D;
+    boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer3D;
     
 public:
     ///////Public objects and variables/////////
@@ -75,13 +75,13 @@ public:
     void updateImages();
     void updateDisparityImg(float scaleFactor = 1.0);
     void updateImage3D();
-    
+
     void displayImages(bool drawLines);
     void displayDisparityMap();
     void displayImage3D();
-   // boost::shared_ptr<pcl::visualization::PCLVisualizer> getPointCloudVisualizer();
-    //void updatePointCloudVisualizer(boost::shared_ptr<pcl::visualization::PCLVisualizer> & viewer);
-    
+    boost::shared_ptr<pcl::visualization::PCLVisualizer> getPointCloudVisualizer();
+    void updatePointCloudVisualizer(boost::shared_ptr<pcl::visualization::PCLVisualizer> & viewer);
+
 	// Initialization methods
 	void setupRectification();
     void setupDisparityParameters();

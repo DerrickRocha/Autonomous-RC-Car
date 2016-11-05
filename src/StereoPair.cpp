@@ -1,6 +1,7 @@
 
 
 #include "StereoPair.h"
+#include "opencv2/gpu/gpu.hpp"
 #include "CommonMethods.h"
 //#include "DUO3D_camera.h"
 #include <string>
@@ -79,7 +80,7 @@ StereoPair::StereoPair(int width, int height, int fps, string _dataDirectory){
     imageWidth = width;
     imageHeight = height;
     maximumDepth = -1.0; // Default: not apply filter when displaying point cloud;
-    
+
     // Setting some defaults
     useColorImages = false;
     flippedUpsideDown = false;
@@ -91,9 +92,6 @@ StereoPair::StereoPair(int width, int height, int fps, string _dataDirectory){
     calibration_boardSize = Size(9, 6);
     calibration_squareSize = 0.022;
     calibration_numberOfImages = 16;
-    
-    
-
     //Open and configure cameras
     webcam.left = VideoCapture();
     webcam.right = VideoCapture();
@@ -125,7 +123,7 @@ void StereoPair::setupRectification() {
     // Read calibration file
     if(!fs.isOpened()){
         cout << "READ ERROR: Calibration file was not found" << endl;
-        cout << "The provided file path is: " + dataDirectory + calibration_parametersFile << endl;
+        cout << "The provided file path is: " + calibration_parametersFile << endl;
         cout << "Do you want to calibrate now? (y/n): " << endl;
         return;
     }
@@ -287,12 +285,14 @@ void StereoPair::updateDisparityImg(float scaleFactor){
         resize(rightImage, scaledRightImage, Size(), scaleFactor, scaleFactor, interpolationMethod);
         
         if (numThreads > 1){
+                cout << "numThreads >1" << endl;
             // Divide the disparity map computation into diferent threads by making each thread compute a strip of the disparity map
             const int extraMargin = 10; // This is for SGBM to use neighbour comparison and make the later strip fusion smooth
             Mat *dispMaps = new Mat[numThreads]; // Since numThreads is unknown, create a dynamically allocated array
 
             # pragma omp parallel for
             for (int i = 0; i < numThreads; i++) {
+                cout << "parallel" << endl;
                 int marginTop = i > 0 ? extraMargin : 0;
                 int marginBottom = i < numThreads-1 ? extraMargin : 0;
                 Rect roi(0, scaledLeftImage.rows*i/numThreads-marginTop, scaledLeftImage.cols, scaledLeftImage.rows/numThreads+marginBottom + marginTop);
@@ -304,6 +304,7 @@ void StereoPair::updateDisparityImg(float scaleFactor){
             // Merge strips into a single disparity map
             disparityMap = Mat(scaledLeftImage.size(), 3);
             for (int i = 0; i < numThreads; i++) {
+                cout << "merge strips" << endl;
                 int marginTop = i > 0 ? extraMargin : 0;
                 int marginBottom = i < numThreads-1 ? extraMargin : 0;
                 Mat roiDispMap = disparityMap(Rect(0, i*(disparityMap.rows/numThreads), disparityMap.cols, disparityMap.rows/numThreads));
@@ -314,7 +315,10 @@ void StereoPair::updateDisparityImg(float scaleFactor){
             delete [] dispMaps;
         }
         else {
+                cout << "thread <= 1" << endl;
             semiGlobalBlobMatch(scaledLeftImage, scaledRightImage, disparityMap);
+	    //Ptr<StereoBM> bm;
+	    printf("gpu count is %d",gpu::getCudaEnabledDeviceCount());
         }
         resize(disparityMap, disparityMap, Size(), 1/scaleFactor, 1/scaleFactor, interpolationMethod);
     }
@@ -322,16 +326,110 @@ void StereoPair::updateDisparityImg(float scaleFactor){
     else semiGlobalBlobMatch(leftImage, rightImage, disparityMap);
 }
 
+//————————————————————————————————————————————————————————————————————
+//  getPointCloudVisualizer
+//————————————————————————————————————————————————————————————————————
+
+boost::shared_ptr<pcl::visualization::PCLVisualizer> StereoPair::getPointCloudVisualizer() {
+    boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
+    viewer->setBackgroundColor (1, 1, 1);
+    viewer->addCoordinateSystem ( 1.0 );
+    viewer->initCameraParameters ();
+    
+    updatePointCloudVisualizer(viewer);
+    
+    return viewer;
+}
+
+//————————————————————————————————————————————————————————————————————
+//  updatePointCloudVisualizer
+//————————————————————————————————————————————————————————————————————
+
+void StereoPair::updatePointCloudVisualizer(boost::shared_ptr<pcl::visualization::PCLVisualizer> & viewer) {
+    bool usePixelColor = false;
+    float pointCloudScale = 100.0;
+    //Create point cloud and fill it
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr point_cloud_ptr (new pcl::PointCloud<pcl::PointXYZRGB>);
+    float minZ = 1000000, maxZ = 0;
+    for(int i = 0; i < image3D.cols; i++){
+        #pragma omp parallel for
+        for(int j = 0; j < image3D.rows; j++){
+                cout << "wierd for" << endl;
+            pcl::PointXYZRGB point;
+            point.x = float(image3D.at<Vec3f>(j, i).val[0]*pointCloudScale);
+            point.y = float(image3D.at<Vec3f>(j, i).val[1]*pointCloudScale);
+            point.z = float(image3D.at<Vec3f>(j, i).val[2]*pointCloudScale);
+            // Filter points that are at the background (noise)
+            if (point.z > maximumDepth) continue;
+            if(point.z < minZ) minZ = point.z;
+            if (point.z > maxZ) maxZ = point.z;
+            
+            if (usePixelColor) {
+                Scalar color = leftImage.at<uchar>(Point(i, j));
+                uint8_t r(color.val[0]);
+                uint8_t g(color.val[0]);
+                uint8_t b(color.val[0]);
+                if (float(image3D.at<Vec3f>(j, i).val[2]) > 0.015) {
+                    r = uint8_t(0);
+                    g = uint8_t(0);
+                    b = uint8_t(255);
+                }
+                
+                uint32_t rgb = (static_cast<uint32_t>(r) << 16 |
+                                static_cast<uint32_t>(g) << 8 | static_cast<uint32_t>(b));
+                point.rgb = *reinterpret_cast<float*>(&rgb);
+            }
+            
+            /*  // Used for debugging the function populateScenario from ObstacleScenario class
+            if(point.y > 0.0 && point.y < 0.1) {
+                if(point.x > -3.0/2.0 && point.x < 3.0/2.0) {
+                    if (point.z < 2.0) {
+                        point_cloud_ptr->points.push_back(point);
+                    }
+                }
+            }
+            */
+            point_cloud_ptr->points.push_back(point);
+        }
+    }
+    
+    if (!usePixelColor) {
+        //  Apply color gradient to the point cloud
+        #pragma omp parallel for
+        for(unsigned int i = 0; i < point_cloud_ptr->size(); i++){
+            float pz = point_cloud_ptr->at(i).z;
+            int pz_mapped = int(mapValue(pz, minZ, maxZ, 0, 255));
+            uint8_t r(255 - constrain(pz_mapped, 0, 255));
+            uint8_t g(constrain(pz_mapped, 0, 255));
+            uint8_t b(15);
+            uint32_t rgb = (static_cast<uint32_t>(r) << 16 |
+                            static_cast<uint32_t>(g) << 8 | static_cast<uint32_t>(b));
+            point_cloud_ptr->at(i).rgb = *reinterpret_cast<float*>(&rgb);
+        }
+    }
+    
+    point_cloud_ptr->width = (int) point_cloud_ptr->points.size();
+    point_cloud_ptr->height = 1;
+    
+    viewer->removeAllPointClouds();
+    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(point_cloud_ptr);
+    viewer->addPointCloud<pcl::PointXYZRGB>(point_cloud_ptr, rgb, "reconstruction");
+    viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "reconstruction");
+}
+
+
+
 
 //————————————————————————————————————————————————————————————————————
 //  displayImage3D
 //————————————————————————————————————————————————————————————————————
 
 void StereoPair::displayImage3D(){
-   /* boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer = getPointCloudVisualizer();
+    boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer = getPointCloudVisualizer();
     
     while (!viewer->wasStopped())
     {
+        cout << "pcl loop" << endl;
         boost::this_thread::sleep (boost::posix_time::microseconds (100000));
         updateImages();
         updateDisparityImg();
@@ -342,7 +440,7 @@ void StereoPair::displayImage3D(){
         if (keyPressed==27){
             viewer->close();
         }
-    }*/
+    }
 }
 
 //————————————————————————————————————————————————————————————————————
@@ -350,7 +448,7 @@ void StereoPair::displayImage3D(){
 //————————————————————————————————————————————————————————————————————
 
 void StereoPair::updateImage3D(){
-    /*
+    
     image3D = Mat(disparityMap.size(), CV_32FC3);
     //Get the interesting parameters from Q
     double Q03, Q13, Q23, Q32, Q33;
@@ -399,7 +497,7 @@ void StereoPair::updateImage3D(){
     //cout << "minX: " << minX << "   maxX: " << maxX << endl;
     //cout << "minY: " << minY << "   maxY: " << maxY << endl;
     //cout << "minZ: " << minZ << "   maxZ: " << maxZ << endl;
-     */
+     
     
     Mat tmpDisp;
     flip(disparityMap, tmpDisp, -1);  // Flip vertically because reprojectImageTo3D inverts image
@@ -447,8 +545,8 @@ void StereoPair::displayDisparityMap() {
     while(1){
         updateImages();
         updateDisparityImg(0.4);
+
         Mat disparityMapNormalised = getDisparityImageNormalised();
-        
         cvtColor(disparityMapNormalised, disparityMapNormalised, COLOR_GRAY2BGR);
         
         // Draw available commands on the bottom-left corner of the window
@@ -464,6 +562,7 @@ void StereoPair::displayDisparityMap() {
         
         // Run point cloud visualizer if 'd' or 'D' keys are pressed
         if(keyPressed== 68 || keyPressed==100) {
+                cout << "should be running point cloud biatch" << endl;
             updateImage3D();
             displayImage3D();
         }
@@ -525,6 +624,7 @@ void StereoPair::calibrate(){
     for( i = j = 0; j < nimages; i++ )
     {
     	while(1){
+                printf("yo");
             this->updateImages();
     		Mat niml = leftImage, nimr = rightImage;
             Mat cimg1, cimg2;	//Corner images
@@ -533,9 +633,10 @@ void StereoPair::calibrate(){
             
             //////////DETECT CHESSBOARD CORNERS AND DISPLAY THEM/////////////
             for( k = 0; k < 2; k++ ) {
+
                 Mat img = k==0 ? niml : nimr;
                 if(img.empty()) break;
-                
+
                 vector<Point2f>& corners = imagePoints[k][j];
                 
                 for( int scale = 1; scale <= maxScale; scale++ ) {

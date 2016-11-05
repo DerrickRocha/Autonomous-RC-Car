@@ -9,22 +9,21 @@
 #include <sys/ioctl.h>
 #include <iostream>
 #include <stdlib.h>
-#include <boost/filesystem.hpp>
 #include "arduino/JetsonToArduino.h"
 #include "StereoPair.h"
 
 #define WIDTH	320
 #define HEIGHT	240
-#define FPS	5
+#define FPS	60
 #define MAX_DEPTH 1.8
-const string INSTALL_DIRECTORY = "/home/autonomousCar/";
-const string DATA_DIRECTORY = "/home/" + string(getlogin()) + "/autonomousCar/"; // user home directory
+//const string INSTALL_DIRECTORY = "/home/autonomousCar/";
+//const string DATA_DIRECTORY = "/home/" + string(getlogin()) + "/autonomousCar/"; // user home directory
 
 
 int main(int argc, char **argv) {
-	StereoPair stereoCam(WIDTH, HEIGHT, FPS, DATA_DIRECTORY);
+	/*StereoPair stereoCam(WIDTH, HEIGHT, FPS, DATA_DIRECTORY);
     	stereoCam.maximumDepth = MAX_DEPTH;
-        stereoCam.calibrate();
+        stereoCam.displayDisparityMap();*/
 
    //open serial port 
   	/*int fd = open("/dev/ttyACM0", O_RDWR | O_NOCTTY);
