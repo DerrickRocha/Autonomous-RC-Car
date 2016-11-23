@@ -11,7 +11,7 @@
 #include "boost/thread/thread.hpp"
 //#include "DUOLib.h"
 #include<stdio.h>
-
+#include "opencv2/gpu/gpu.hpp"
 
 
 
@@ -42,7 +42,12 @@ private:
     bool    rectify;
     int     imageWidth;
     int     imageHeight;
-    
+
+    cv::gpu::GpuMat d_left, d_right;
+    gpu::StereoBM_GPU bm;
+    gpu::StereoBeliefPropagation bp;
+    gpu::StereoConstantSpaceBP csbp;
+
 	Rectification	rectification;			// Rectification maps
 	StereoSGBM		semiGlobalBlobMatch;	// Disparity computation method
 	Mat				Q;                      // camera matrix from stereoRectify(..., Q, ...);

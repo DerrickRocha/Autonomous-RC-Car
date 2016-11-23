@@ -7,62 +7,6 @@
 #include <string>
 
 //————————————————————————————————————————————————————————————————————
-// saveImage
-//————————————————————————————————————————————————————————————————————
-
-bool StereoPair::saveImage(Mat image, string imageName, string outputDirectory) {
-    
-    if(!outputDirectory.empty()){
-        char fileName[256];
-        sprintf(fileName, "%s%s.png", outputDirectory.c_str(), imageName.c_str());
-        try {
-            imwrite(fileName, image);
-            cout << "Saved image: " << fileName << endl;
-            return 1;
-        }
-        catch (std::runtime_error& ex){
-            fprintf(stderr, "Could not save image to store: %s \n", ex.what());
-        }
-    }
-    else fprintf(stderr, "Output directory is not set. Image could not be saved.");
-    return false;
-}
-
-
-//————————————————————————————————————————————————————————————————————
-//  glueTwoImagesHorizontal
-//————————————————————————————————————————————————————————————————————
-
-Mat StereoPair::glueTwoImagesHorizontal(Mat Img1, Mat Img2){
-    Mat LR(Img1.rows, Img1.cols+Img2.cols, Img1.type());
-    
-    //Place each image horizontally adjacent to each other
-    Mat left_roi(LR, Rect(0, 0, Img1.cols, Img1.rows));
-    Img1.copyTo(left_roi);
-    Mat right_roi(LR, Rect(Img1.cols, 0, Img2.cols, Img2.rows)); // Copy constructor
-    Img2.copyTo(right_roi);
-    
-    return LR;
-}
-
-
-//————————————————————————————————————————————————————————————————————
-//  glueTwoImagesVertical
-//————————————————————————————————————————————————————————————————————
-
-Mat StereoPair::glueTwoImagesVertical(Mat Img1, Mat Img2){
-    Mat LR(Img1.rows+Img2.rows, Img1.cols, Img1.type());
-    
-    //Place each image vertically adjacent to each other
-    Mat top_roi(LR, Rect(0, 0, Img1.cols, Img1.rows));
-    Img1.copyTo(top_roi);
-    Mat bottom_roi(LR, Rect(0, Img1.rows, Img2.cols, Img2.rows)); // Copy constructor
-    Img2.copyTo(bottom_roi);
-    
-    return LR;
-}
-
-//————————————————————————————————————————————————————————————————————
 // Default initializer
 //————————————————————————————————————————————————————————————————————
 
@@ -105,7 +49,6 @@ StereoPair::StereoPair(int width, int height, int fps, string _dataDirectory){
 	//Setup Semi Global Block Matching object
     setupDisparityParameters();
 }
-
 
 //————————————————————————————————————————————————————————————————————
 //  setupRectification
@@ -154,9 +97,147 @@ void StereoPair::setupRectification() {
     }
 }
 
+//————————————————————————————————————————————————————————————————————
+//  setupDisparityParameters
+//————————————————————————————————————————————————————————————————————
 
-void StereoPair::rectifyImages(bool doRectify){
-    rectify = doRectify;
+void StereoPair::setupDisparityParameters() {
+    string sgbmParametersFile = dataDirectory + sgbm_ParametersFileName;
+    FileStorage fs(sgbmParametersFile.c_str(), FileStorage::READ);
+    if (fs.isOpened()) {
+        fs["SADWindowSize"]         >> semiGlobalBlobMatch.SADWindowSize;
+        fs["numberOfDisparities"]   >> semiGlobalBlobMatch.numberOfDisparities;
+        fs["preFilterCap"]          >> semiGlobalBlobMatch.preFilterCap;
+        fs["minDisparity"]          >> semiGlobalBlobMatch.minDisparity;
+        fs["uniquenessRatio"]       >> semiGlobalBlobMatch.uniquenessRatio;
+        fs["speckleWindowSize"]     >> semiGlobalBlobMatch.speckleWindowSize;
+        fs["speckleRange"]          >> semiGlobalBlobMatch.speckleRange;
+        fs["disp12MaxDiff"]         >> semiGlobalBlobMatch.disp12MaxDiff;
+        fs["fullDP"]                >> semiGlobalBlobMatch.fullDP;
+        fs["P1"]                    >> semiGlobalBlobMatch.P1;
+        fs["P2"]                    >> semiGlobalBlobMatch.P2;
+    }
+    else {
+        cout << "READ ERROR: could not read from " << sgbmParametersFile << endl;
+        cout << "The provided file path is: " + dataDirectory + sgbm_ParametersFileName << endl;
+        cout << "using default parameters" << endl;
+        semiGlobalBlobMatch.SADWindowSize = 5;
+        semiGlobalBlobMatch.numberOfDisparities = 192;
+        semiGlobalBlobMatch.preFilterCap = 9;
+        semiGlobalBlobMatch.minDisparity = 5;
+        semiGlobalBlobMatch.uniquenessRatio = 18;
+        semiGlobalBlobMatch.speckleWindowSize = 83;
+        semiGlobalBlobMatch.speckleRange = 95;
+        semiGlobalBlobMatch.disp12MaxDiff = 25;
+        semiGlobalBlobMatch.fullDP = true;
+        semiGlobalBlobMatch.P1 = 240;
+        semiGlobalBlobMatch.P2 = 2339;
+    }
+
+}
+
+//————————————————————————————————————————————————————————————————————
+//  displayDisparityMap
+//————————————————————————————————————————————————————————————————————
+
+void StereoPair::displayDisparityMap() {
+    namedWindow("Disparity", CV_WINDOW_AUTOSIZE);
+    
+    //  Create the Controls window
+    namedWindow("Controls", CV_WINDOW_NORMAL);
+    Mat controlsBackground(1, 450, leftImage.type(), Scalar(150));
+    imshow("Controls", controlsBackground);
+    createTrackbar("SADWindowSize", "Controls", &semiGlobalBlobMatch.SADWindowSize, 50);
+    //  createTrackbar("numberOfDisparities", "Controls", &sgbm.numberOfDisparities, 1000);
+    createTrackbar("preFilterCap", "Controls", &semiGlobalBlobMatch.preFilterCap, 100);
+    createTrackbar("minDisparity", "Controls", &semiGlobalBlobMatch.minDisparity, 100);
+    createTrackbar("uniquenessRatio", "Controls", &semiGlobalBlobMatch.uniquenessRatio, 100);
+    createTrackbar("speckleWindowSize", "Controls", &semiGlobalBlobMatch.speckleWindowSize, 300);
+    createTrackbar("speckleRange", "Controls", &semiGlobalBlobMatch.speckleRange, 100);
+    createTrackbar("disp12MaxDiff", "Controls", &semiGlobalBlobMatch.disp12MaxDiff, 100);
+    createTrackbar("P1", "Controls", &semiGlobalBlobMatch.P1, 3000);
+    createTrackbar("P2", "Controls", &semiGlobalBlobMatch.P2, 10000);
+    
+    //int whiteThreshold = 255;
+    int frameCount = 0;
+    while(1){
+	    updateImages();
+            //updateDisparityImg(0.4);
+         Mat scaledLeftImage, scaledRightImage;
+        int interpolationMethod = INTER_AREA;
+        float scaleFactor = 0.4;
+        //resize(leftImage, scaledLeftImage, Size(), scaleFactor, scaleFactor, interpolationMethod);
+       // resize(rightImage, scaledRightImage, Size(), scaleFactor, scaleFactor, interpolationMethod);
+     
+          // Set common parameters
+        bm.ndisp = 128;
+        bp.ndisp = 16;
+        csbp.ndisp = 0;
+  // Prepare disparity map of specified type
+        Mat disp(leftImage.size(), CV_8U);
+        gpu::GpuMat d_disp(leftImage.size(), CV_8U);
+	d_left.upload(leftImage);
+        d_right.upload(rightImage);
+          if (d_left.channels() > 1 || d_right.channels() > 1)
+            {
+                cout << "BM doesn't support color images\n";
+               
+            }
+        bm(d_left, d_right, d_disp);
+            //bp(d_left, d_right, d_disp);
+        d_disp.download(disparityMap);
+         Mat disparityMapNormalised = getDisparityImageNormalised();
+
+                imshow("Disparity", disparityMapNormalised);
+ // Exit when esc key is pressed
+// Wait for key press
+        int keyPressed = int(char(waitKey(20)));
+        if( keyPressed== 27) break;
+    }
+    
+   /* while(1){
+        updateImages();
+        updateDisparityImg(0.4);
+
+        Mat disparityMapNormalised = getDisparityImageNormalised();
+        cvtColor(disparityMapNormalised, disparityMapNormalised, COLOR_GRAY2BGR);
+        
+        // Draw available commands on the bottom-left corner of the window
+        string message = "s: Save images                  d: Launch point cloud viewer";
+        putText(disparityMapNormalised, message, Point(10, disparityMapNormalised.rows - 30), FONT_HERSHEY_COMPLEX_SMALL, 0.7, CV_RGB(255, 123, 47), 1, CV_AA);
+        message = "x: Save current parameters    ESC: Close mode";
+        putText(disparityMapNormalised, message, Point(10, disparityMapNormalised.rows - 10), FONT_HERSHEY_COMPLEX_SMALL, 0.7, CV_RGB(255, 123, 47), 1, CV_AA);
+        
+        imshow("Disparity", disparityMapNormalised);
+        
+        // Wait for key press
+        int keyPressed = int(char(waitKey(20)));
+        
+        // Run point cloud visualizer if 'd' or 'D' keys are pressed
+        if(keyPressed== 68 || keyPressed==100) {
+                cout << "should be running point cloud biatch" << endl;
+         //   updateImage3D();
+         //   displayImage3D();
+        }
+        
+        // Save the images if required (press 's' or 'S')
+        else if(keyPressed== 83 || keyPressed==115) {
+         //   saveImage(disparityMapNormalised, "DepthMap_" + std::to_string(frameCount), dataDirectory);
+         //   frameCount++;
+        }
+        
+        // Save disparity parameters (press 'x' or 'X')
+        else if(keyPressed==120 || keyPressed==88){
+         //   saveDisparityParameters();
+        }
+        
+        // Exit when esc key is pressed
+        if( keyPressed== 27) break;
+    }*/
+
+    destroyWindow("Disparity");
+    destroyWindow("Controls");
+    for(int i = 0; i < 10; i++) waitKey(1); // In some systems, if this is not included windows may becmome unresponsive.
 }
 
 //————————————————————————————————————————————————————————————————————
@@ -196,80 +277,6 @@ void StereoPair::updateImages() {
     }
 }
 
-
-//————————————————————————————————————————————————————————————————————
-//  displayImages
-//————————————————————————————————————————————————————————————————————
-
-void StereoPair::displayImages(bool drawLines) {
-    // Create visualization windows
-//    if (rectified) namedWindow("Rectified stereo images", CV_WINDOW_NORMAL);
-//    else namedWindow("Uncalibrated stereo images", CV_WINDOW_NORMAL);
-    // Reset frame counter
-    int frameCount = 0;
-    
-    for (;;) {
-        updateImages();
-        Mat LR = glueTwoImagesHorizontal(leftImage, rightImage);
-        
-        if (drawLines) {
-            cvtColor(LR, LR, COLOR_GRAY2BGR);   // Convert to BGR (RGB) color space for drawing coloured lines.
-            for(int h=0; h<LR.rows; h+=25) {
-                Point pt1(0, h);
-                Point pt2(LR.cols, h);
-                line(LR, pt1, pt2, CV_RGB(255, 123, 47), 1);
-            }
-        }
-        
-        // Draw available commands on the bottom-left corner of the window
-        string message = "s: Save images    a: Autotune exposure     ESC: Close mode";
-        putText(LR, message, Point(10, LR.rows - 10), FONT_HERSHEY_COMPLEX_SMALL, 0.7, CV_RGB(255, 123, 47), 1, CV_AA);
-        
-        if (rectify) imshow("Rectified stereo images", LR);
-        else imshow("Uncalibrated stereo images", LR);
-
-        int keyPressed = int(char(waitKey(10)));
-        
-        // Save the images if 's' or 'S' key has been pressed
-        if( keyPressed==83 || keyPressed==115) {
-            saveImage(leftImage, (rectify? "Rectified_L_" + std::to_string(frameCount) : "Uncalibrated_L_" + std::to_string(frameCount)), dataDirectory);
-            saveImage(rightImage, (rectify? "Rectified_R_" + std::to_string(frameCount) : "Uncalibrated_R_" + std::to_string(frameCount)), dataDirectory);
-            if (drawLines) saveImage(LR, "StereoPair" + std::to_string(frameCount), dataDirectory);
-            frameCount++;
-        }
-        
-        // Exit if 'esc' key is pressed
-        if( keyPressed==27) {
-            // Close the windows
-            if (rectify) destroyWindow("Rectified stereo images");
-            else destroyWindow("Uncalibrated stereo images");
-            for(int i = 0; i < 10; i++) waitKey(1); // In some systems, if this is not included windows may becmome unresponsive.
-            return;
-        }
-    }
-}
-
-//————————————————————————————————————————————————————————————————————
-//  resizeImages
-//————————————————————————————————————————————————————————————————————
-
-void StereoPair::resizeImages(float scaleFactor){
-    /*
-     * RESIZE INTERPOLATION METHODS
-     *
-     * INTER_NEAREST - a nearest-neighbor interpolation
-     * INTER_LINEAR - a bilinear interpolation (used by default)
-     * INTER_AREA - resampling using pixel area relation. It may be a preferred method for image decimation, as it gives moire’-free results. But when the image is zoomed, it is similar to the INTER_NEAREST method.
-     * INTER_CUBIC - a bicubic interpolation over 4x4 pixel neighborhood
-     * INTER_LANCZOS4 - a Lanczos interpolation over 8x8 pixel neighborhood
-     *
-     */
-    //RESIZE IMAGE FOR TESTING DIFFERENT RESOLUTIONS
-     resize(leftImage, leftImage, Size(), scaleFactor, scaleFactor, INTER_CUBIC);
-     resize(rightImage, rightImage, Size(), scaleFactor, scaleFactor, INTER_CUBIC);
-}
-
-
 //————————————————————————————————————————————————————————————————————
 //  updateDisparityImg
 //————————————————————————————————————————————————————————————————————
@@ -283,8 +290,29 @@ void StereoPair::updateDisparityImg(float scaleFactor){
 
         resize(leftImage, scaledLeftImage, Size(), scaleFactor, scaleFactor, interpolationMethod);
         resize(rightImage, scaledRightImage, Size(), scaleFactor, scaleFactor, interpolationMethod);
-        
-        if (numThreads > 1){
+     
+          // Set common parameters
+        bm.ndisp = 256;
+        bp.ndisp = 0;
+        csbp.ndisp = 0;
+  // Prepare disparity map of specified type
+        Mat disp(scaledLeftImage.size(), CV_8U);
+        gpu::GpuMat d_disp(scaledLeftImage.size(), CV_8U);
+	d_left.upload(scaledLeftImage);
+        d_right.upload(scaledRightImage);
+          if (d_left.channels() > 1 || d_right.channels() > 1)
+            {
+                cout << "BM doesn't support color images\n";
+               
+            }
+            bm(d_left, d_right, d_disp);
+        d_disp.download(disp);
+                imshow("Disparity", disp);
+	//cout << "M = " << endl << " " << disp << endl << endl;
+       // bp = cuda::createStereoBeliefPropagation(p.ndisp);
+       // csbp = cuda::createStereoConstantSpaceBP(p.ndisp);
+
+      /*  if (numThreads > 1){
                 cout << "numThreads >1" << endl;
             // Divide the disparity map computation into diferent threads by making each thread compute a strip of the disparity map
             const int extraMargin = 10; // This is for SGBM to use neighbour comparison and make the later strip fusion smooth
@@ -319,192 +347,13 @@ void StereoPair::updateDisparityImg(float scaleFactor){
             semiGlobalBlobMatch(scaledLeftImage, scaledRightImage, disparityMap);
 	    //Ptr<StereoBM> bm;
 	    printf("gpu count is %d",gpu::getCudaEnabledDeviceCount());
-        }
-        resize(disparityMap, disparityMap, Size(), 1/scaleFactor, 1/scaleFactor, interpolationMethod);
+        }*/
+        //resize(disparityMap, disparityMap, Size(), 1/scaleFactor, 1/scaleFactor, interpolationMethod);
+                 cout << "I need to take a shit\n";
     }
     
     else semiGlobalBlobMatch(leftImage, rightImage, disparityMap);
 }
-
-//————————————————————————————————————————————————————————————————————
-//  getPointCloudVisualizer
-//————————————————————————————————————————————————————————————————————
-
-boost::shared_ptr<pcl::visualization::PCLVisualizer> StereoPair::getPointCloudVisualizer() {
-    boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
-    viewer->setBackgroundColor (1, 1, 1);
-    viewer->addCoordinateSystem ( 1.0 );
-    viewer->initCameraParameters ();
-    
-    updatePointCloudVisualizer(viewer);
-    
-    return viewer;
-}
-
-//————————————————————————————————————————————————————————————————————
-//  updatePointCloudVisualizer
-//————————————————————————————————————————————————————————————————————
-
-void StereoPair::updatePointCloudVisualizer(boost::shared_ptr<pcl::visualization::PCLVisualizer> & viewer) {
-    bool usePixelColor = false;
-    float pointCloudScale = 100.0;
-    //Create point cloud and fill it
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr point_cloud_ptr (new pcl::PointCloud<pcl::PointXYZRGB>);
-    float minZ = 1000000, maxZ = 0;
-    for(int i = 0; i < image3D.cols; i++){
-        #pragma omp parallel for
-        for(int j = 0; j < image3D.rows; j++){
-                cout << "wierd for" << endl;
-            pcl::PointXYZRGB point;
-            point.x = float(image3D.at<Vec3f>(j, i).val[0]*pointCloudScale);
-            point.y = float(image3D.at<Vec3f>(j, i).val[1]*pointCloudScale);
-            point.z = float(image3D.at<Vec3f>(j, i).val[2]*pointCloudScale);
-            // Filter points that are at the background (noise)
-            if (point.z > maximumDepth) continue;
-            if(point.z < minZ) minZ = point.z;
-            if (point.z > maxZ) maxZ = point.z;
-            
-            if (usePixelColor) {
-                Scalar color = leftImage.at<uchar>(Point(i, j));
-                uint8_t r(color.val[0]);
-                uint8_t g(color.val[0]);
-                uint8_t b(color.val[0]);
-                if (float(image3D.at<Vec3f>(j, i).val[2]) > 0.015) {
-                    r = uint8_t(0);
-                    g = uint8_t(0);
-                    b = uint8_t(255);
-                }
-                
-                uint32_t rgb = (static_cast<uint32_t>(r) << 16 |
-                                static_cast<uint32_t>(g) << 8 | static_cast<uint32_t>(b));
-                point.rgb = *reinterpret_cast<float*>(&rgb);
-            }
-            
-            /*  // Used for debugging the function populateScenario from ObstacleScenario class
-            if(point.y > 0.0 && point.y < 0.1) {
-                if(point.x > -3.0/2.0 && point.x < 3.0/2.0) {
-                    if (point.z < 2.0) {
-                        point_cloud_ptr->points.push_back(point);
-                    }
-                }
-            }
-            */
-            point_cloud_ptr->points.push_back(point);
-        }
-    }
-    
-    if (!usePixelColor) {
-        //  Apply color gradient to the point cloud
-        #pragma omp parallel for
-        for(unsigned int i = 0; i < point_cloud_ptr->size(); i++){
-            float pz = point_cloud_ptr->at(i).z;
-            int pz_mapped = int(mapValue(pz, minZ, maxZ, 0, 255));
-            uint8_t r(255 - constrain(pz_mapped, 0, 255));
-            uint8_t g(constrain(pz_mapped, 0, 255));
-            uint8_t b(15);
-            uint32_t rgb = (static_cast<uint32_t>(r) << 16 |
-                            static_cast<uint32_t>(g) << 8 | static_cast<uint32_t>(b));
-            point_cloud_ptr->at(i).rgb = *reinterpret_cast<float*>(&rgb);
-        }
-    }
-    
-    point_cloud_ptr->width = (int) point_cloud_ptr->points.size();
-    point_cloud_ptr->height = 1;
-    
-    viewer->removeAllPointClouds();
-    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(point_cloud_ptr);
-    viewer->addPointCloud<pcl::PointXYZRGB>(point_cloud_ptr, rgb, "reconstruction");
-    viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "reconstruction");
-}
-
-
-
-
-//————————————————————————————————————————————————————————————————————
-//  displayImage3D
-//————————————————————————————————————————————————————————————————————
-
-void StereoPair::displayImage3D(){
-    boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer = getPointCloudVisualizer();
-    
-    while (!viewer->wasStopped())
-    {
-        cout << "pcl loop" << endl;
-        boost::this_thread::sleep (boost::posix_time::microseconds (100000));
-        updateImages();
-        updateDisparityImg();
-        updateImage3D();
-        updatePointCloudVisualizer(viewer);
-        viewer->spinOnce(10, true);
-        int keyPressed = int(char(waitKey(10)));
-        if (keyPressed==27){
-            viewer->close();
-        }
-    }
-}
-
-//————————————————————————————————————————————————————————————————————
-//  updateImage3D
-//————————————————————————————————————————————————————————————————————
-
-void StereoPair::updateImage3D(){
-    
-    image3D = Mat(disparityMap.size(), CV_32FC3);
-    //Get the interesting parameters from Q
-    double Q03, Q13, Q23, Q32, Q33;
-    Q03 = Q.at<double>(0,3);    //cx
-    Q13 = Q.at<double>(1,3);    //cy
-    Q23 = Q.at<double>(2,3);    //f 
-    Q32 = Q.at<double>(3,2);    //
-    Q33 = Q.at<double>(3,3);
-    
-    double px, py, pz;
-    double minX = 10000000, maxX = 0;
-    double minY = 10000000, maxY = 0;
-    double minZ = 10000000, maxZ = 0;
-    for (int i = 0; i < disparityMap.rows; i++)
-    {
-        uchar* disp_ptr = disparityMap.ptr<uchar>(i);
-
-        for (int j = 0; j < disparityMap.cols; j++)
-        {
-            //Get 3D coordinates
-            double d = static_cast<double>(disp_ptr[j]);
-            if ( d == 0 ) continue; //Discard bad pixels
-            double pw = 1.0 * d * Q32 + Q33;
-            px = static_cast<double>(j) + Q03;
-            py = static_cast<double>(i) + Q13;
-            pz = Q23;
-            
-            px = px/pw;
-            py = py/pw;
-            pz = pz/pw;
-            if (pz == 0) continue;
-            if (pz > 0.3) continue;
-            //if (px > 1.0 || px < 1.0) continue;
-            //if (py > 1.0 || py < 1.0) continue;
-            if(px < minX) minX = px;
-            else if (px > maxX) maxX = px;
-            if(py < minY) minY = py;
-            else if (py > maxY) maxY = py;
-            if(pz < minZ) minZ = pz;
-            else if (pz > maxZ) maxZ = pz;
-            image3D.at<Vec3f>(i, j).val[0] = px;
-            image3D.at<Vec3f>(i, j).val[1] = -1*py;
-            image3D.at<Vec3f>(i, j).val[2] = pz;
-        }
-    }
-    //cout << "minX: " << minX << "   maxX: " << maxX << endl;
-    //cout << "minY: " << minY << "   maxY: " << maxY << endl;
-    //cout << "minZ: " << minZ << "   maxZ: " << maxZ << endl;
-     
-    
-    Mat tmpDisp;
-    flip(disparityMap, tmpDisp, -1);  // Flip vertically because reprojectImageTo3D inverts image
-    image3D = Mat(tmpDisp.size(), CV_32FC3);
-    reprojectImageTo3D(tmpDisp, image3D, Q);
-}
-
 
 //————————————————————————————————————————————————————————————————————
 //  getDisparityImgNormalised
@@ -514,76 +363,6 @@ Mat StereoPair::getDisparityImageNormalised(){
 	Mat dspn;
 	normalize(disparityMap, dspn, 0, 255, CV_MINMAX, CV_8U);
 	return dspn;
-}
-
-
-//————————————————————————————————————————————————————————————————————
-//  displayDisparityMap
-//————————————————————————————————————————————————————————————————————
-
-void StereoPair::displayDisparityMap() {
-    namedWindow("Disparity", CV_WINDOW_AUTOSIZE);
-    
-    //  Create the Controls window
-    namedWindow("Controls", CV_WINDOW_NORMAL);
-    Mat controlsBackground(1, 450, leftImage.type(), Scalar(150));
-    imshow("Controls", controlsBackground);
-    createTrackbar("SADWindowSize", "Controls", &semiGlobalBlobMatch.SADWindowSize, 50);
-    //  createTrackbar("numberOfDisparities", "Controls", &sgbm.numberOfDisparities, 1000);
-    createTrackbar("preFilterCap", "Controls", &semiGlobalBlobMatch.preFilterCap, 100);
-    createTrackbar("minDisparity", "Controls", &semiGlobalBlobMatch.minDisparity, 100);
-    createTrackbar("uniquenessRatio", "Controls", &semiGlobalBlobMatch.uniquenessRatio, 100);
-    createTrackbar("speckleWindowSize", "Controls", &semiGlobalBlobMatch.speckleWindowSize, 300);
-    createTrackbar("speckleRange", "Controls", &semiGlobalBlobMatch.speckleRange, 100);
-    createTrackbar("disp12MaxDiff", "Controls", &semiGlobalBlobMatch.disp12MaxDiff, 100);
-    createTrackbar("P1", "Controls", &semiGlobalBlobMatch.P1, 3000);
-    createTrackbar("P2", "Controls", &semiGlobalBlobMatch.P2, 10000);
-    
-    //int whiteThreshold = 255;
-    int frameCount = 0;
-    
-    while(1){
-        updateImages();
-        updateDisparityImg(0.4);
-
-        Mat disparityMapNormalised = getDisparityImageNormalised();
-        cvtColor(disparityMapNormalised, disparityMapNormalised, COLOR_GRAY2BGR);
-        
-        // Draw available commands on the bottom-left corner of the window
-        string message = "s: Save images                  d: Launch point cloud viewer";
-        putText(disparityMapNormalised, message, Point(10, disparityMapNormalised.rows - 30), FONT_HERSHEY_COMPLEX_SMALL, 0.7, CV_RGB(255, 123, 47), 1, CV_AA);
-        message = "x: Save current parameters    ESC: Close mode";
-        putText(disparityMapNormalised, message, Point(10, disparityMapNormalised.rows - 10), FONT_HERSHEY_COMPLEX_SMALL, 0.7, CV_RGB(255, 123, 47), 1, CV_AA);
-        
-        imshow("Disparity", disparityMapNormalised);
-        
-        // Wait for key press
-        int keyPressed = int(char(waitKey(20)));
-        
-        // Run point cloud visualizer if 'd' or 'D' keys are pressed
-        if(keyPressed== 68 || keyPressed==100) {
-                cout << "should be running point cloud biatch" << endl;
-            updateImage3D();
-            displayImage3D();
-        }
-        
-        // Save the images if required (press 's' or 'S')
-        else if(keyPressed== 83 || keyPressed==115) {
-            saveImage(disparityMapNormalised, "DepthMap_" + std::to_string(frameCount), dataDirectory);
-            frameCount++;
-        }
-        
-        // Save disparity parameters (press 'x' or 'X')
-        else if(keyPressed==120 || keyPressed==88){
-            saveDisparityParameters();
-        }
-        
-        // Exit when esc key is pressed
-        if( keyPressed== 27) break;
-    }
-    destroyWindow("Disparity");
-    destroyWindow("Controls");
-    for(int i = 0; i < 10; i++) waitKey(1); // In some systems, if this is not included windows may becmome unresponsive.
 }
 
 //————————————————————————————————————————————————————————————————————
@@ -834,111 +613,94 @@ void StereoPair::calibrate(){
     this->displayImages(true /*drawLines*/);
 }
 
-
 //————————————————————————————————————————————————————————————————————
-//  setupDisparityParameters
+//  glueTwoImagesHorizontal
 //————————————————————————————————————————————————————————————————————
 
-void StereoPair::setupDisparityParameters() {
-    string sgbmParametersFile = dataDirectory + sgbm_ParametersFileName;
-    FileStorage fs(sgbmParametersFile.c_str(), FileStorage::READ);
-    if (fs.isOpened()) {
-        fs["SADWindowSize"]         >> semiGlobalBlobMatch.SADWindowSize;
-        fs["numberOfDisparities"]   >> semiGlobalBlobMatch.numberOfDisparities;
-        fs["preFilterCap"]          >> semiGlobalBlobMatch.preFilterCap;
-        fs["minDisparity"]          >> semiGlobalBlobMatch.minDisparity;
-        fs["uniquenessRatio"]       >> semiGlobalBlobMatch.uniquenessRatio;
-        fs["speckleWindowSize"]     >> semiGlobalBlobMatch.speckleWindowSize;
-        fs["speckleRange"]          >> semiGlobalBlobMatch.speckleRange;
-        fs["disp12MaxDiff"]         >> semiGlobalBlobMatch.disp12MaxDiff;
-        fs["fullDP"]                >> semiGlobalBlobMatch.fullDP;
-        fs["P1"]                    >> semiGlobalBlobMatch.P1;
-        fs["P2"]                    >> semiGlobalBlobMatch.P2;
-    }
-    else {
-        cout << "READ ERROR: could not read from " << sgbmParametersFile << endl;
-        cout << "The provided file path is: " + dataDirectory + sgbm_ParametersFileName << endl;
-        cout << "using default parameters" << endl;
-        semiGlobalBlobMatch.SADWindowSize = 5;
-        semiGlobalBlobMatch.numberOfDisparities = 192;
-        semiGlobalBlobMatch.preFilterCap = 9;
-        semiGlobalBlobMatch.minDisparity = 5;
-        semiGlobalBlobMatch.uniquenessRatio = 18;
-        semiGlobalBlobMatch.speckleWindowSize = 83;
-        semiGlobalBlobMatch.speckleRange = 95;
-        semiGlobalBlobMatch.disp12MaxDiff = 25;
-        semiGlobalBlobMatch.fullDP = true;
-        semiGlobalBlobMatch.P1 = 240;
-        semiGlobalBlobMatch.P2 = 2339;
-    }
-
+Mat StereoPair::glueTwoImagesHorizontal(Mat Img1, Mat Img2){
+    Mat LR(Img1.rows, Img1.cols+Img2.cols, Img1.type());
+    
+    //Place each image horizontally adjacent to each other
+    Mat left_roi(LR, Rect(0, 0, Img1.cols, Img1.rows));
+    Img1.copyTo(left_roi);
+    Mat right_roi(LR, Rect(Img1.cols, 0, Img2.cols, Img2.rows)); // Copy constructor
+    Img2.copyTo(right_roi);
+    
+    return LR;
 }
 
 
 //————————————————————————————————————————————————————————————————————
-//  saveDisparityParameters
+//  displayImages
 //————————————————————————————————————————————————————————————————————
 
-void StereoPair::saveDisparityParameters() {
-    string sgbmParametersFile = dataDirectory + sgbm_ParametersFileName;
-    FileStorage fs(sgbmParametersFile.c_str(), FileStorage::WRITE);
-    if (fs.isOpened()) {
-        fs <<   "SADWindowSize" << semiGlobalBlobMatch.SADWindowSize <<
-        "numberOfDisparities"   << semiGlobalBlobMatch.numberOfDisparities <<
-        "preFilterCap"          << semiGlobalBlobMatch.preFilterCap <<
-        "minDisparity"          << semiGlobalBlobMatch.minDisparity <<
-        "uniquenessRatio"       << semiGlobalBlobMatch.uniquenessRatio <<
-        "speckleWindowSize"     << semiGlobalBlobMatch.speckleWindowSize <<
-        "speckleRange"          << semiGlobalBlobMatch.speckleRange <<
-        "disp12MaxDiff"         << semiGlobalBlobMatch.disp12MaxDiff <<
-        "fullDP"                << semiGlobalBlobMatch.fullDP <<
-        "P1"                    << semiGlobalBlobMatch.P1 <<
-        "P2"                    << semiGlobalBlobMatch.P2;
+void StereoPair::displayImages(bool drawLines) {
+    // Create visualization windows
+//    if (rectified) namedWindow("Rectified stereo images", CV_WINDOW_NORMAL);
+//    else namedWindow("Uncalibrated stereo images", CV_WINDOW_NORMAL);
+    // Reset frame counter
+    int frameCount = 0;
+    
+    for (;;) {
+        updateImages();
+        Mat LR = glueTwoImagesHorizontal(leftImage, rightImage);
         
-        cout << "\n***** semiGlobalBlobMatch parameters saved *****" << endl;
-        cout << "  semiGlobalBlobMatch.SADWindowSize       = "<< semiGlobalBlobMatch.SADWindowSize        << ";" << endl;
-        cout << "  semiGlobalBlobMatch.numberOfDisparities = "<< semiGlobalBlobMatch.numberOfDisparities  << ";" << endl;
-        cout << "  semiGlobalBlobMatch.preFilterCap        = "<< semiGlobalBlobMatch.preFilterCap         << ";" << endl;
-        cout << "  semiGlobalBlobMatch.minDisparity        = "<< semiGlobalBlobMatch.minDisparity         << ";" << endl;
-        cout << "  semiGlobalBlobMatch.uniquenessRatio     = "<< semiGlobalBlobMatch.uniquenessRatio      << ";" << endl;
-        cout << "  semiGlobalBlobMatch.speckleWindowSize   = "<< semiGlobalBlobMatch.speckleWindowSize    << ";" << endl;
-        cout << "  semiGlobalBlobMatch.speckleRange        = "<< semiGlobalBlobMatch.speckleRange         << ";" << endl;
-        cout << "  semiGlobalBlobMatch.disp12MaxDiff       = "<< semiGlobalBlobMatch.disp12MaxDiff        << ";" << endl;
-        cout << "  semiGlobalBlobMatch.fullDP              = "<< (semiGlobalBlobMatch.fullDP==0?"false":"true") << ";" << endl;
-        cout << "  semiGlobalBlobMatch.P1                  = "<< semiGlobalBlobMatch.P1                   << ";" << endl;
-        cout << "  semiGlobalBlobMatch.P2                  = "<< semiGlobalBlobMatch.P2                   << ";" << endl << endl;
-    }
-    else cout << "SAVE ERROR: could not write to " << sgbmParametersFile << endl;
-}
-
-//————————————————————————————————————————————————————————————————————
-//  flipUpsideDown
-//————————————————————————————————————————————————————————————————————
-void StereoPair::flipUpsideDown() {
-    flippedUpsideDown = !flippedUpsideDown;
-}
-
-
-//————————————————————————————————————————————————————————————————————
-//  computeFieldOfView
-//————————————————————————————————————————————————————————————————————
-
-float StereoPair::computeFieldOfView() {
-    float maxX = 0;
-    float maxZ = 0;
-    if (!image3D.empty()) {
-        for(int i = 0; i < image3D.cols; i++){
-            for(int j = 0; j < image3D.rows; j++){
-                float x = float(image3D.at<Vec3f>(j, i).val[0]);
-                float z = float(image3D.at<Vec3f>(j, i).val[2]);
-                if (abs(x) > maxX) maxX = x;
-                if (abs(z) > maxZ) maxZ = z;
+        if (drawLines) {
+            cvtColor(LR, LR, COLOR_GRAY2BGR);   // Convert to BGR (RGB) color space for drawing coloured lines.
+            for(int h=0; h<LR.rows; h+=25) {
+                Point pt1(0, h);
+                Point pt2(LR.cols, h);
+                line(LR, pt1, pt2, CV_RGB(255, 123, 47), 1);
             }
         }
-        float fieldOfView = (2*atan(maxX/maxZ))*(180/3.1415);
-        return fieldOfView;
+        
+        // Draw available commands on the bottom-left corner of the window
+        string message = "s: Save images    a: Autotune exposure     ESC: Close mode";
+        putText(LR, message, Point(10, LR.rows - 10), FONT_HERSHEY_COMPLEX_SMALL, 0.7, CV_RGB(255, 123, 47), 1, CV_AA);
+        
+        if (rectify) imshow("Rectified stereo images", LR);
+        else imshow("Uncalibrated stereo images", LR);
+
+        int keyPressed = int(char(waitKey(10)));
+        
+        // Save the images if 's' or 'S' key has been pressed
+        if( keyPressed==83 || keyPressed==115) {
+            saveImage(leftImage, (rectify? "Rectified_L_" + std::to_string(frameCount) : "Uncalibrated_L_" + std::to_string(frameCount)), dataDirectory);
+            saveImage(rightImage, (rectify? "Rectified_R_" + std::to_string(frameCount) : "Uncalibrated_R_" + std::to_string(frameCount)), dataDirectory);
+            if (drawLines) saveImage(LR, "StereoPair" + std::to_string(frameCount), dataDirectory);
+            frameCount++;
+        }
+        
+        // Exit if 'esc' key is pressed
+        if( keyPressed==27) {
+            // Close the windows
+            if (rectify) destroyWindow("Rectified stereo images");
+            else destroyWindow("Uncalibrated stereo images");
+            for(int i = 0; i < 10; i++) waitKey(1); // In some systems, if this is not included windows may becmome unresponsive.
+            return;
+        }
     }
-    else return -1;
 }
 
+//————————————————————————————————————————————————————————————————————
+// saveImage
+//————————————————————————————————————————————————————————————————————
+
+bool StereoPair::saveImage(Mat image, string imageName, string outputDirectory) {
+    
+   /* if(!outputDirectory.empty()){
+        char fileName[256];
+        sprintf(fileName, "%s%s.png", outputDirectory.c_str(), imageName.c_str());
+        try {
+            imwrite(fileName, image);
+            cout << "Saved image: " << fileName << endl;
+            return 1;
+        }
+        catch (std::runtime_error& ex){
+            fprintf(stderr, "Could not save image to store: %s \n", ex.what());
+        }
+    }
+    else fprintf(stderr, "Output directory is not set. Image could not be saved.");
+    return false;*/
+}
 
