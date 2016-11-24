@@ -253,4 +253,3 @@ Mat Simulator::drawScenario(vector<Point2f> points, float fov){
     
     //Update the simulator display
     return display;
-}

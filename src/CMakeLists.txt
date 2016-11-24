@@ -27,6 +27,6 @@ find_package(Boost COMPONENTS filesystem REQUIRED)
 include_directories(${Boost_INCLUDE_DIR})
 link_directories(${Boost_LIBRARY_DIRS})
 
-file(GLOB Project_SRC main.cpp StereoPair.h StereoPair.cpp)
+file(GLOB Project_SRC main.cpp StereoPair.h StereoPair.cpp Simulator.h Simulator.cpp ObstaclScenario.h ObstacleScenario.cpp PathPlaner.h PathPlaner.cpp)
 cuda_add_executable(${ProjectName} ${Project_SRC})
 target_link_libraries(${ProjectName} ${OpenCV_LIBRARIES} ${PCL_LIBRARIES} ${Boost_LIBRARIES})

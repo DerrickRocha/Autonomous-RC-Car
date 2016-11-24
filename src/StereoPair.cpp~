@@ -307,29 +307,6 @@ void StereoPair::updateImage3D(){
 
 }
 
-//————————————————————————————————————————————————————————————————————
-//  computeFieldOfView
-//————————————————————————————————————————————————————————————————————
-
-float StereoPair::computeFieldOfView() {
-    float maxX = 0;
-    float maxZ = 0;
-    if (!image3D.empty()) {
-        for(int i = 0; i < image3D.cols; i++){
-            for(int j = 0; j < image3D.rows; j++){
-                float x = float(image3D.at<Vec3f>(j, i).val[0]);
-                float z = float(image3D.at<Vec3f>(j, i).val[2]);
-                if (abs(x) > maxX) maxX = x;
-                if (abs(z) > maxZ) maxZ = z;
-            }
-        }
-        float fieldOfView = (2*atan(maxX/maxZ))*(180/3.1415);
-        return fieldOfView;
-    }
-    else return -1;
-}
-
-
 
 //————————————————————————————————————————————————————————————————————
 //  getDisparityImgNormalised
