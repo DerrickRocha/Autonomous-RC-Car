@@ -74,6 +74,7 @@ int main(int argc, char **argv) {
     float scenDepth = 1.0;  // meters
     float squareSize = 0.08; // meters
     int iteration = 0;
+    int movingIteration = 0;
     float fieldOfView = -1;
     Simulator simulator = Simulator(scenWidth, scenDepth, squareSize, 1200, DATA_DIRECTORY);
     simulator.scenario.minY = 0.0;
@@ -99,14 +100,18 @@ int main(int argc, char **argv) {
 
 		    PathPlaner planer;
 		    newCurveRadius = planer.findAvoidancePath(simulator.scenario, 10000, display, simulator.squarePixelSize);
-		    printf("obstacles detected. Curve radius is %f.\n",newCurveRadius);
+		    //printf("obstacles detected. Curve radius is %f.\n",newCurveRadius);
 		    stop(fd);
 		    isRunning = false;
 		}
 		else if(!isRunning){
-		    printf("obstacles not detected. Curve radius is %f.\n",newCurveRadius);
-		    moveForward(fd);
-		    isRunning = true;
+		    //printf("obstacles not detected. Curve radius is %f.\n",newCurveRadius);
+		    if(iteration >= movingIteration+5){
+		        moveForward(fd);
+		        movingIteration = iteration;
+		    }
+		    //usleep(3000000);
+		    //isRunning = true;
 		}
 		///////////////Display update////////////////////
 		imshow("Simulator", display);
@@ -121,6 +126,7 @@ int main(int argc, char **argv) {
 	     		stereoCam.displayDisparityMap();  
 	  	}
 		iteration++;
+                //usleep(500000);
 	    }
 
    //open serial port 
