@@ -31,7 +31,7 @@ ObstacleScenario::ObstacleScenario(float _width, float _depth, float _squareSize
 
 
 void ObstacleScenario::populateScenario(Mat &image3D, bool &obstaclesDetected) {
-    clearScenario();
+     clearScenario();
     if (image3D.empty()) return;
     
     points.clear(); // Remove all previous points
@@ -41,11 +41,12 @@ void ObstacleScenario::populateScenario(Mat &image3D, bool &obstaclesDetected) {
         for(int j = 0; j < image3D.rows; j++){
             Point3f point3D;
             point3D.x = float(image3D.at<Vec3f>(j, i).val[0]*scaleFactor);
-            point3D.y = float(image3D.at<Vec3f>(j, i).val[1]*scaleFactor);
-            point3D.z = float(image3D.at<Vec3f>(j, i).val[2]*scaleFactor);
+            point3D.y = float(image3D.at<Vec3f>(j, i).val[1]);
+            point3D.z = float(image3D.at<Vec3f>(j, i).val[2]);
             if(point3D.y > minY && point3D.y > maxY) {
                 if(point3D.x > -width/2 && point3D.x < width/2) {
                     if (point3D.z >= 0.0 && point3D.z < depth) {
+			  //printf("z go.\n");
                         // Add points converted to scenario coordinates (origin at top-left corner)
                         points.push_back(Point2f(point3D.x + width/2, depth - point3D.z));
                     }
@@ -61,6 +62,7 @@ void ObstacleScenario::populateScenario(Mat &image3D, bool &obstaclesDetected) {
         scenario.at(square_x).at(square_y) = 1;
         obstaclesDetected = true;
     }
+
 }
 
 void ObstacleScenario::clearScenario(){

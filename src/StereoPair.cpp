@@ -168,10 +168,12 @@ void StereoPair::displayDisparityMap() {
          Mat disparityMapNormalised = getDisparityImageNormalised();
 
                 imshow("Disparity", disparityMapNormalised);
+        
  // Exit when esc key is pressed
 // Wait for key press
         int keyPressed = int(char(waitKey(20)));
         if( keyPressed== 27) break;
+ 
     }
     destroyWindow("Disparity");
     destroyWindow("Controls");
@@ -220,17 +222,10 @@ void StereoPair::updateImages() {
 //————————————————————————————————————————————————————————————————————
 
 void StereoPair::updateDisparityImg(float scaleFactor){
-      Mat scaledLeftImage, scaledRightImage;
-        int interpolationMethod = INTER_AREA;
-        //resize(leftImage, scaledLeftImage, Size(), scaleFactor, scaleFactor, interpolationMethod);
-       // resize(rightImage, scaledRightImage, Size(), scaleFactor, scaleFactor, interpolationMethod);
-     
+    
           // Set common parameters
         bm.ndisp = 128;
-        bp.ndisp = 16;
-        csbp.ndisp = 0;
   // Prepare disparity map of specified type
-        Mat disp(leftImage.size(), CV_8U);
         gpu::GpuMat d_disp(leftImage.size(), CV_8U);
 	d_left.upload(leftImage);
         d_right.upload(rightImage);
@@ -240,7 +235,6 @@ void StereoPair::updateDisparityImg(float scaleFactor){
                
             }
         bm(d_left, d_right, d_disp);
-            //bp(d_left, d_right, d_disp);
         d_disp.download(disparityMap);
 }
 
@@ -249,57 +243,8 @@ void StereoPair::updateDisparityImg(float scaleFactor){
 //————————————————————————————————————————————————————————————————————
 
 void StereoPair::updateImage3D(){
-    /*
-    image3D = Mat(disparityMap.size(), CV_32FC3);
-    //Get the interesting parameters from Q
-    double Q03, Q13, Q23, Q32, Q33;
-    Q03 = Q.at<double>(0,3);    //cx
-    Q13 = Q.at<double>(1,3);    //cy
-    Q23 = Q.at<double>(2,3);    //f 
-    Q32 = Q.at<double>(3,2);    //
-    Q33 = Q.at<double>(3,3);
     
-    double px, py, pz;
-    double minX = 10000000, maxX = 0;
-    double minY = 10000000, maxY = 0;
-    double minZ = 10000000, maxZ = 0;
-    for (int i = 0; i < disparityMap.rows; i++)
-    {
-        uchar* disp_ptr = disparityMap.ptr<uchar>(i);
-
-        for (int j = 0; j < disparityMap.cols; j++)
-        {
-            //Get 3D coordinates
-            double d = static_cast<double>(disp_ptr[j]);
-            if ( d == 0 ) continue; //Discard bad pixels
-            double pw = 1.0 * d * Q32 + Q33;
-            px = static_cast<double>(j) + Q03;
-            py = static_cast<double>(i) + Q13;
-            pz = Q23;
-            
-            px = px/pw;
-            py = py/pw;
-            pz = pz/pw;
-            if (pz == 0) continue;
-            if (pz > 0.3) continue;
-            //if (px > 1.0 || px < 1.0) continue;
-            //if (py > 1.0 || py < 1.0) continue;
-            if(px < minX) minX = px;
-            else if (px > maxX) maxX = px;
-            if(py < minY) minY = py;
-            else if (py > maxY) maxY = py;
-            if(pz < minZ) minZ = pz;
-            else if (pz > maxZ) maxZ = pz;
-            image3D.at<Vec3f>(i, j).val[0] = px;
-            image3D.at<Vec3f>(i, j).val[1] = -1*py;
-            image3D.at<Vec3f>(i, j).val[2] = pz;
-        }
-    }
-    //cout << "minX: " << minX << "   maxX: " << maxX << endl;
-    //cout << "minY: " << minY << "   maxY: " << maxY << endl;
-    //cout << "minZ: " << minZ << "   maxZ: " << maxZ << endl;
-     */
-    
+  
     Mat tmpDisp;
     flip(disparityMap, tmpDisp, -1);  // Flip vertically because reprojectImageTo3D inverts image
     image3D = Mat(tmpDisp.size(), CV_32FC3);
@@ -319,15 +264,61 @@ float StereoPair::computeFieldOfView() {
             for(int j = 0; j < image3D.rows; j++){
                 float x = float(image3D.at<Vec3f>(j, i).val[0]);
                 float z = float(image3D.at<Vec3f>(j, i).val[2]);
-                if (abs(x) > maxX) maxX = x;
-                if (abs(z) > maxZ) maxZ = z;
+                //printf("X = %.02f\n",x);
+		//printf("Z = %.02f\n",z);
+                if (abs(x) > maxX && !isinf(x)) maxX = x;
+                if (abs(z) > maxZ && !isinf(z)) maxZ = z;
+                //printf("maxX = %.02f\n",maxX);
+                //printf("maxZ = %.02f\n",maxZ);
             }
         }
         float fieldOfView = (2*atan(maxX/maxZ))*(180/3.1415);
+        printf("fieldOfView = %f\n",fieldOfView);
         return fieldOfView;
     }
     else return -1;
 }
+
+//————————————————————————————————————————————————————————————————————
+//  displayImage3D
+//————————————————————————————————————————————————————————————————————
+
+void StereoPair::displayImage3D(){
+    /*boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer = getPointCloudVisualizer();
+    
+    while (!viewer->wasStopped())
+    {
+        boost::this_thread::sleep (boost::posix_time::microseconds (100000));
+        updateImages();
+        updateDisparityImg();
+        updateImage3D();
+        //updatePointCloudVisualizer(viewer);
+        viewer->spinOnce(10, true);
+        int keyPressed = int(char(waitKey(10)));
+        if (keyPressed==27){
+            viewer->close();
+        }
+    }*/
+}
+
+//————————————————————————————————————————————————————————————————————
+//  getPointCloudVisualizer
+//————————————————————————————————————————————————————————————————————
+
+boost::shared_ptr<pcl::visualization::PCLVisualizer> StereoPair::getPointCloudVisualizer() {
+    /*boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
+    viewer->setBackgroundColor (1, 1, 1);
+    viewer->addCoordinateSystem ( 1.0 );
+    viewer->initCameraParameters ();
+    
+    updatePointCloudVisualizer(viewer);*/
+    
+    return NULL;
+}
+
+//————————————————————————————————————————————————————————————————————
+//  updatePointCloudVisualizer
+//————————————————————————————————————————————————————————————————————
 
 
 

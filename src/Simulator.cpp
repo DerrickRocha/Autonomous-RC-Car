@@ -31,7 +31,6 @@ Simulator::Simulator(float width, float height, float squareSize, int windowWidt
     XSquares = ceil(width/squareSize);
     YSquares = ceil(height/squareSize);
     squareRealSize = squareSize;
-
     //Make XSquares an even number so the car appears centered.
     if (XSquares % 2 != 0){
         XSquares += 1;
@@ -45,7 +44,7 @@ Simulator::Simulator(float width, float height, float squareSize, int windowWidt
     ///Grid dimensions
 
     squarePixelSize = ceil(windowWidth/XSquares);
-    
+    printf("squarePixelSize - %d, ",squarePixelSize);
     windowSize = Size(squarePixelSize*XSquares, squarePixelSize*YSquares);
     display = Mat(windowSize, CV_8UC3, COLOR_EMPTY);
     drawGrid();
@@ -224,7 +223,6 @@ void Simulator::runSimulation(bool autoEraseColumns){
 Mat Simulator::drawScenario(vector<Point2f> points, float fov){
 
     display = Mat(windowSize, CV_8UC3, COLOR_EMPTY);
-    # pragma omp parallel for
     for (int i = 0; i<XSquares; i++) {
         for (int j = 0; j < YSquares; j++) {
             if (scenario.scenario.at(i).at(j) == 1) {
@@ -235,7 +233,6 @@ Mat Simulator::drawScenario(vector<Point2f> points, float fov){
     drawGrid();
     
     if (!points.empty()) {
-        # pragma omp parallel for
         for (int i = 0; i < points.size(); i++) {
             Point pt_scrnCoords = Point(points.at(i).x*(squarePixelSize/scenario.squareSize), points.at(i).y*(squarePixelSize/scenario.squareSize));
             circle(display, pt_scrnCoords, 1, CV_RGB(250, 20, 20));

@@ -12,8 +12,7 @@
 //#include "DUOLib.h"
 #include<stdio.h>
 #include "opencv2/gpu/gpu.hpp"
-
-
+#include <math.h>
 
 
 #define DUO3D
